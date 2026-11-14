@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>現場候位</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "PingFang TC", "Noto Sans TC", sans-serif;
+         background: #f4f3ef; color: #2c2c2a; }
+  .wrap { max-width: 420px; margin: 0 auto; padding: 20px 16px 40px; }
+  .card { background: #fff; border-radius: 16px; padding: 20px; }
+  h1 { font-size: 18px; text-align: center; margin: 0 0 12px; font-weight: 600; }
+  .muted { color: #6b6a65; font-size: 14px; }
+  .center { text-align: center; }
+  .badge { display: block; text-align: center; border-radius: 8px; padding: 6px; font-size: 14px; margin-bottom: 14px; }
+  .badge.open { background: #eaf3de; color: #3b6d11; }
+  .badge.closed { background: #fcebeb; color: #a32d2d; }
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 14px 0; }
+  .stat { background: #f4f3ef; border-radius: 10px; padding: 10px; text-align: center; }
+  .stat small { display: block; color: #6b6a65; font-size: 12px; }
+  .stat b { font-size: 22px; }
+  label { display: block; font-size: 14px; color: #6b6a65; margin: 14px 0 6px; }
+  input[type=text], input[type=tel] { width: 100%; font-size: 18px; padding: 10px 12px;
+         border: 1px solid #d3d1c7; border-radius: 10px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .seg { display: flex; gap: 6px; }
+  .seg button { flex: 1; font-size: 16px; padding: 10px 0; border-radius: 10px;
+                border: 1px solid #d3d1c7; background: #fff; color: #2c2c2a; }
+  .seg button.on { background: #e6f1fb; border-color: #378add; color: #0c447c; }
+  .stepper { display: flex; align-items: center; justify-content: space-between;
+             border: 1px solid #d3d1c7; border-radius: 10px; padding: 4px; }
+  .stepper button { width: 40px; height: 36px; font-size: 20px; border: none; background: #f4f3ef; border-radius: 8px; }
+  .stepper span { font-size: 18px; font-weight: 600; }
+  .check { display: flex; gap: 8px; align-items: flex-start; margin: 16px 0 4px; font-size: 14px; color: #444441; }
+  .rules { font-size: 13px; color: #6b6a65; line-height: 1.7; background: #f4f3ef; border-radius: 10px; padding: 10px 12px; margin-top: 12px; }
+  .primary { width: 100%; margin-top: 16px; font-size: 18px; padding: 14px; border: none; border-radius: 12px;
+             background: #185fa5; color: #fff; font-weight: 600; }
+  .primary:disabled { background: #b4b2a9; }
+  .error { color: #a32d2d; font-size: 14px; margin-top: 10px; min-height: 1em; }
+  .bigno { font-size: 64px; font-weight: 700; line-height: 1.1; text-align: center; margin: 4px 0; }
+  .note { font-size: 14px; line-height: 1.7; background: #f4f3ef; border-radius: 10px; padding: 10px 12px; }
+  .link { background: none; border: none; color: #6b6a65; text-decoration: underline; font-size: 13px; padding: 8px; }
+  .foot { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; font-size: 12px; color: #888780; }
+  .state-remind { background: #faeeda; color: #633806; }
+  .state-remind .stat, .state-remind .note { background: #fac77555; }
+  .state-called { background: #eaf3de; color: #27500a; }
+  .state-called .note { background: #c0dd9755; }
+  .headline { text-align: center; font-size: 22px; font-weight: 700; margin: 0 0 4px; }
+  .timer { text-align: center; font-size: 15px; margin: 10px 0; }
+  .timer b { font-size: 22px; }
+  .ack { background: #3b6d11; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div id="loading" class="card center muted">載入中…</div>
+
+  <!-- 登記頁 -->
+  <div id="formView" class="card" hidden>
+    <h1 id="storeName">現場候位</h1>
+    <div id="openBadge" class="badge open"></div>
+    <div class="stats">
+      <div class="stat"><small>目前叫號</small><b id="boardCurrent">---</b></div>
+      <div class="stat"><small>目前等候</small><b id="boardWaiting">0</b> 組</div>
+    </div>
+
+    <div id="formFields">
+      <div class="row">
+        <div>
+          <label for="surname">姓氏</label>
+          <input id="surname" type="text" maxlength="2" placeholder="陳" autocomplete="off">
+        </div>
+        <div>
+          <label>稱謂</label>
+          <div class="seg" id="titleSeg">
+            <button type="button" data-v="先生">先生</button>
+            <button type="button" data-v="小姐">小姐</button>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>用餐人數</label>
+          <div class="stepper">
+            <button type="button" onclick="changeParty(-1)">−</button>
+            <span id="party">2</span>
+            <button type="button" onclick="changeParty(1)">＋</button>
+          </div>
+        </div>
+        <div>
+          <label for="last3">電話末三碼</label>
+          <input id="last3" type="tel" inputmode="numeric" maxlength="3" placeholder="123">
+        </div>
+      </div>
+      <div class="rules">
+        請勿重複登記。叫號後請在保留時間內到櫃檯，逾時視為過號。人數到齊才會安排入座。
+      </div>
+      <label class="check"><input type="checkbox" id="agree"> 我已閱讀並同意候位規則</label>
+      <button class="primary" id="submitBtn" onclick="submitForm()">登記候位</button>
+      <div class="error" id="formError"></div>
+    </div>
+  </div>
+
+  <!-- 進度頁 -->
+  <div id="statusView" class="card" hidden>
+    <p class="headline" id="sHeadline" hidden></p>
+    <div class="center muted" id="sLabel">你的號碼</div>
+    <div class="bigno" id="sNo">---</div>
+    <div class="center" id="sInfo" style="font-size:14px;"></div>
+
+    <div id="sWaitBlock">
+      <div class="stats">
+        <div class="stat"><small>目前叫號</small><b id="sCurrent">---</b></div>
+        <div class="stat"><small>前面還有</small><b id="sAhead">0</b> 組</div>
+      </div>
+      <div class="note" id="sNote"></div>
+    </div>
+
+    <div id="sCalledBlock" hidden>
+      <div class="timer" id="sTimer"></div>
+      <button class="primary ack" id="ackBtn" onclick="doAck()">我收到了，馬上到</button>
+      <div class="note center" id="ackDone" hidden>已通知店家，請盡快到櫃檯</div>
+    </div>
+
+    <div class="foot">
+      <span id="sUpdated"></span>
+      <button class="link" id="cancelBtn" onclick="doCancel()">取消候位</button>
+    </div>
+  </div>
+
+  <!-- 結束頁（已入座、過號、已取消、找不到） -->
+  <div id="doneView" class="card center" hidden>
+    <p class="headline" id="dTitle"></p>
+    <p class="muted" id="dText"></p>
+    <button class="primary" id="againBtn" onclick="resetToForm()">重新登記</button>
+  </div>
+
+</div>
+
+<script>
+  // ↓↓↓ 這裡填你的 Apps Script 網址（結尾是 /exec，不能有 /u/3）
+  const API_URL = 'https://script.google.com/macros/s/AKfycbyxuyArvB8cbzOEqLSbSZxE8zpsGO3Zxqh7n_kYwfmwxXsAR2EOdAhQuwrwOQID-KZ-GQ/exec';
+
+  // 跟後端溝通：送出「要做什麼」和資料，拿回結果
+  // Content-Type 用 text/plain 是為了避開瀏覽器的跨網域預檢，Apps Script 才收得到
+  async function api(action, payload) {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: action, payload: payload || {} }),
+    });
+    const out = await res.json();
+    if (!out.ok) throw new Error(out.error || '發生錯誤');
+    return out.data;
+  }
+
+  const POLL_MS = 15000;          // 每 15 秒更新一次
+  let token = null;
+  let pollTimer = null;
+  let countdownTimer = null;
+  let holdLeft = null;
+  let lastState = null;           // 用來判斷「剛進入」提醒或叫號狀態
+  let audioCtx = null;
+  let title = '';
+  let party = 2;
+
+  const $ = id => document.getElementById(id);
+  const VIEWS = ['loading', 'formView', 'statusView', 'doneView'];
+  function show(id) { VIEWS.forEach(v => $(v).hidden = (v !== id)); }
+  function pad(n) { return n == null ? '---' : String(n).padStart(3, '0'); }
+  function now() { const d = new Date(); return d.toTimeString().slice(0, 5); }
+
+  function saveToken(t) {
+    token = t;
+    try { t ? localStorage.setItem('wl_token', t) : localStorage.removeItem('wl_token'); } catch (e) {}
+    history.replaceState(null, '', t ? '?t=' + encodeURIComponent(t) : location.pathname);
+  }
+
+  /* ── 提示音與震動（手機要先點過畫面一次才能發聲） ── */
+  document.addEventListener('click', () => {
+    if (!audioCtx) {
+      try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+    }
+  });
+  function alertUser(times) {
+    if (navigator.vibrate) navigator.vibrate([400, 200, 400, 200, 400]);
+    if (!audioCtx) return;
+    for (let i = 0; i < times; i++) {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.frequency.value = 880;
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      const t0 = audioCtx.currentTime + i * 0.5;
+      gain.gain.setValueAtTime(0.3, t0);
+      gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.35);
+      osc.start(t0); osc.stop(t0 + 0.35);
+    }
+  }
+
+  /* ── 啟動：網址或手機裡有查詢碼就顯示進度，沒有就顯示登記頁 ── */
+  (function start() {
+    let t = new URLSearchParams(location.search).get('t');
+    if (!t) { try { t = localStorage.getItem('wl_token'); } catch (e) {} }
+    if (t) { token = t; refreshStatus(); } else { loadForm(); }
+  })();
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') token ? refreshStatus() : loadForm();
+  });
+
+  /* ── 登記頁 ── */
+  function loadForm() {
+    clearTimeout(pollTimer);
+    api('board').then(b => {
+      document.title = b.storeName + '・現場候位';
+      $('storeName').textContent = b.storeName;
+      $('boardCurrent').textContent = pad(b.currentNo);
+      $('boardWaiting').textContent = b.waiting;
+      const badge = $('openBadge');
+      if (b.open) {
+        badge.className = 'badge open';
+        badge.textContent = '登記中・' + b.slots;
+        $('formFields').hidden = false;
+      } else {
+        badge.className = 'badge closed';
+        badge.textContent = b.reason + (b.slots ? '（登記時段 ' + b.slots + '）' : '');
+        $('formFields').hidden = true;
+      }
+      show('formView');
+      pollTimer = setTimeout(loadForm, POLL_MS);
+    }).catch(showLoadError);
+  }
+
+  document.querySelectorAll('#titleSeg button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      title = btn.dataset.v;
+      document.querySelectorAll('#titleSeg button').forEach(b => b.classList.toggle('on', b === btn));
+      $('formError').textContent = '';
+    });
+  });
+  ['surname', 'last3', 'agree'].forEach(id => $(id).addEventListener('input', () => $('formError').textContent = ''));
+
+  function changeParty(d) {
+    party = Math.min(20, Math.max(1, party + d));
+    $('party').textContent = party;
+  }
+
+  function submitForm() {
+    const surname = $('surname').value.trim();
+    const last3 = $('last3').value.trim();
+    const err = $('formError');
+    if (!/^[一-鿿A-Za-z]{1,2}$/.test(surname)) return err.textContent = '請輸入 1～2 個字的姓氏';
+    if (!title) return err.textContent = '請選擇稱謂';
+    if (!/^\d{3}$/.test(last3)) return err.textContent = '電話末三碼要填 3 個數字';
+    if (!$('agree').checked) return err.textContent = '請先勾選同意候位規則';
+
+    const btn = $('submitBtn');
+    btn.disabled = true; btn.textContent = '登記中…';
+    api('register', { surname: surname, title: title, party: party, last3: last3 })
+      .then(res => {
+        btn.disabled = false; btn.textContent = '登記候位';
+        saveToken(res.token);
+        lastState = null;
+        refreshStatus();
+      })
+      .catch(e => {
+        btn.disabled = false; btn.textContent = '登記候位';
+        err.textContent = cleanError(e);
+      });
+  }
+
+  /* ── 進度頁 ── */
+  function refreshStatus() {
+    clearTimeout(pollTimer);
+    api('status', { token: token }).then(renderStatus).catch(e => {
+      $('sUpdated').textContent = '連線失敗，重新嘗試中…';
+      pollTimer = setTimeout(refreshStatus, POLL_MS);
+    });
+  }
+
+  function renderStatus(s) {
+    if (!s.found) { saveToken(null); return loadForm(); }
+
+    if (s.status === '已入座') return showDone('祝您用餐愉快', pad(s.no) + ' 號已入座');
+    if (s.status === '過號') {
+      // 過號後繼續更新：店員幫忙排回名單後，這頁會自動回到等待畫面
+      showDone('已過號', '請回到櫃檯告知店員，店員會幫你排回等待名單，這個頁面會自動更新', true);
+      lastState = 'missed';
+      pollTimer = setTimeout(refreshStatus, POLL_MS);
+      return;
+    }
+    if (s.status === '已取消') return showDone('已取消候位', '需要的話可以重新登記');
+
+    show('statusView');
+    const card = $('statusView');
+    $('sNo').textContent = pad(s.no);
+    $('sInfo').textContent = s.name + '・' + s.party + ' 人・末三碼 ' + s.last3;
+    $('sCurrent').textContent = pad(s.currentNo);
+    $('sAhead').textContent = s.ahead;
+    $('sUpdated').textContent = '最後更新 ' + now() + '・每 15 秒自動更新';
+
+    const state = s.status === '已叫號' ? 'called' : (s.remind ? 'remind' : 'wait');
+    card.className = 'card' + (state === 'wait' ? '' : ' state-' + state);
+    $('sHeadline').hidden = state === 'wait';
+    $('sLabel').hidden = state !== 'wait';
+    $('sWaitBlock').hidden = state === 'called';
+    $('sCalledBlock').hidden = state !== 'called';
+    $('cancelBtn').hidden = state === 'called';
+
+    if (state === 'wait') {
+      $('sNote').textContent = '可以在附近稍候，前面剩 ' + s.remindBefore + ' 組時畫面會提醒你。請保持這個頁面開啟。';
+    } else if (state === 'remind') {
+      $('sHeadline').textContent = '快輪到你了';
+      $('sNote').textContent = '請回到店門口等候，輪到時畫面會再提醒你。';
+    } else {
+      $('sHeadline').textContent = '輪到你了，請到櫃檯';
+      $('ackBtn').hidden = s.acked;
+      $('ackDone').hidden = !s.acked;
+      startCountdown(s.holdLeft);
+    }
+    if (state !== 'called') clearInterval(countdownTimer);
+
+    // 店員按「再叫一次」時叫號時間會改變，也要重新提醒
+    const key = state === 'called' ? 'called:' + s.calledTs : state;
+    if (lastState !== null && key !== lastState) {
+      if (state === 'remind') alertUser(2);
+      if (state === 'called') alertUser(4);
+    }
+    lastState = key;
+    pollTimer = setTimeout(refreshStatus, state === 'wait' ? POLL_MS : 10000);
+  }
+
+  function startCountdown(sec) {
+    holdLeft = sec;
+    clearInterval(countdownTimer);
+    const tick = () => {
+      if (holdLeft == null) return;
+      if (holdLeft <= 0) {
+        $('sTimer').innerHTML = '保留時間已到，請<b>立刻</b>到櫃檯';
+        return clearInterval(countdownTimer);
+      }
+      const m = Math.floor(holdLeft / 60), s = holdLeft % 60;
+      $('sTimer').innerHTML = '保留時間剩 <b>' + m + ':' + String(s).padStart(2, '0') + '</b>';
+      holdLeft--;
+    };
+    tick();
+    countdownTimer = setInterval(tick, 1000);
+  }
+
+  function doAck() {
+    $('ackBtn').disabled = true;
+    api('ack', { token: token }).then(() => {
+      $('ackBtn').hidden = true; $('ackDone').hidden = false; $('ackBtn').disabled = false;
+    }).catch(() => { $('ackBtn').disabled = false; });
+  }
+
+  function doCancel() {
+    if (!window.confirm('確定要取消候位嗎？')) return;
+    api('cancel', { token: token }).then(() => refreshStatus()).catch(() => refreshStatus());
+  }
+
+  /* ── 結束頁 ── */
+  function showDone(t, text, keepToken) {
+    clearTimeout(pollTimer); clearInterval(countdownTimer);
+    $('dTitle').textContent = t;
+    $('dText').textContent = text;
+    $('againBtn').hidden = !!keepToken;
+    show('doneView');
+  }
+  function resetToForm() { saveToken(null); lastState = null; show('loading'); loadForm(); }
+
+  function cleanError(e) { return String(e && e.message ? e.message : e).replace(/^Error:\s*/, ''); }
+  function showLoadError(e) {
+    $('loading').textContent = '載入失敗：' + cleanError(e) + '，請重新整理頁面';
+    show('loading');
+  }
+</script>
+</body>
+</html>
