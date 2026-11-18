@@ -330,7 +330,7 @@
     $('sLabel').hidden = state !== 'wait';
     $('sWaitBlock').hidden = state === 'called';
     $('sCalledBlock').hidden = state !== 'called';
-    $('cancelBtn').hidden = state === 'called';
+    $('cancelBtn').hidden = false;
 
     if (state === 'wait') {
       $('sNote').textContent = '可以在附近稍候，前面剩 ' + s.remindBefore + ' 組時畫面會提醒你。請保持這個頁面開啟。';
